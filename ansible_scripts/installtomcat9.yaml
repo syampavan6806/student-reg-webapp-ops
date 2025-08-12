@@ -1,6 +1,6 @@
 ---
 - name: Install Java 17 and Tomcat 9
-  hosts: 172.31.0.28
+  hosts: tomcatservers
   become: true
   vars:
     java_package: java-17-amazon-corretto-devel
