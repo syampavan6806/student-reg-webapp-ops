@@ -1,0 +1,147 @@
+---
+- name: Install Java 17 and Tomcat 9
+  hosts: 172.31.0.28
+  become: true
+  vars:
+    java_package: java-17-amazon-corretto-devel
+    tomcat_version: 9.0.108
+    tomcat_user: tomcat
+    tomcat_group: tomcat
+    install_dir: /opt/tomcat
+    manager_comment: true
+    tomcat_users:
+    - username: atulit
+      password: atulit123
+      roles: manager-gui,admin-gui
+    - username: mohit
+      password: mohit123
+      roles: admin-gui
+
+  tasks:
+
+    - name: Install Java 17
+      yum:
+        name: "{{ java_package }}"
+        state: present
+        update_cache: yes
+
+    - name: Create tomcat group
+      group:
+        name: "{{ tomcat_group }}"
+        state: present
+
+    - name: Create tomcat user
+      user:
+        name: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        shell: /bin/false
+        create_home: false
+        system: yes
+
+    - name: Download Tomcat 9
+      get_url:
+        url: "https://downloads.apache.org/tomcat/tomcat-9/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        dest: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+
+    - name: Create installation directory
+      file:
+        path: "{{ install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Extract Tomcat archive
+      unarchive:
+        src: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+        dest: "{{ install_dir }}"
+        remote_src: yes
+        creates: "{{ install_dir }}/apache-tomcat-{{ tomcat_version }}"
+
+    - name: Change ownership of Tomcat directory
+      file:
+        path: "{{ install_dir }}/apache-tomcat-{{ tomcat_version }}"
+        state: directory
+        recurse: yes
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+
+    - name: Create symlink to latest tomcat
+      file:
+        src: "{{ install_dir }}/apache-tomcat-{{ tomcat_version }}"
+        dest: "{{ install_dir }}/latest"
+        state: link
+        force: yes
+
+    - name: Create Tomcat systemd service
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+
+          Environment=JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64
+          Environment=CATALINA_PID={{ install_dir }}/latest/temp/tomcat.pid
+          Environment=CATALINA_HOME={{ install_dir }}/latest
+          Environment=CATALINA_BASE={{ install_dir }}/latest
+          Environment='CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC'
+          Environment='JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom'
+
+          ExecStart={{ install_dir }}/latest/bin/startup.sh
+          ExecStop={{ install_dir }}/latest/bin/shutdown.sh
+
+          User={{ tomcat_user }}
+          Group={{ tomcat_group }}
+          UMask=0007
+          RestartSec=10
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Tomcat
+      systemd:
+        name: tomcat
+        enabled: yes
+        state: started
+
+    - name: Modify manger context.xml using template
+      template:
+        src: context.xml.j2
+        dest: "{{ install_dir }}/apache-tomcat-9.0.108/webapps/manager/META-INF/context.xml"
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        mode: '0644'
+
+    - name: Modify host-manger context.xml using template
+      template:
+        src: context.xml.j2
+        dest: "{{ install_dir }}/apache-tomcat-9.0.108/webapps/host-manager/META-INF/context.xml"
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        mode: '0644'
+      notify: Restart the Tomcat
+
+
+    - name: Copy tomcat-users.xml
+      template:
+        src: tomcat-users.xml.j2
+        dest: "{{ install_dir }}/apache-tomcat-9.0.108/conf/tomcat-users.xml"
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        mode: '0644'
+      notify: Restart the Tomcat
+
+  handlers:
+  - name: Restart the Tomcat
+    systemd:
+      name: tomcat
+      state: restarted
