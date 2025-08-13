@@ -4,3 +4,4 @@
 
 [tomcatservers]
 172.31.41.107 ansible_user="{{ ssh_username }}"
+172.31.45.87  ansible_user="{{ ssh_username }}"
