@@ -1,6 +1,6 @@
 172.31.2.95 ansible_user="{{ ssh_username }}"
 
-172.31.0.28 ansible_user="{{ ssh_username }}" ansible_ssh_pass="{{ password }}"
+172.31.0.28 ansible_user="{{ ssh_username }}" 
 
 [tomcatservers]
 172.31.12.252 ansible_user=atulit ansible_ssh_pass="{{ password }}"
