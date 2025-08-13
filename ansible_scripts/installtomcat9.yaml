@@ -1,5 +1,5 @@
 - name: Install OpenJDK 17 and Apache Tomcat
-  hosts: tomcat_server
+  hosts: tomcatservers
   become: yes
   gather_facts: false # Disable fact gathering until connection is established
   tasks:
